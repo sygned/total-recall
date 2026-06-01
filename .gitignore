@@ -1,0 +1,8 @@
+*.zip
+.claude
+.bak
+.editorconfig
+
+CLAUDE.md
+docs
+release

@@ -1,0 +1,20 @@
+{
+	"manifest_version": 3,
+	"name": "Total Recall",
+	"version": "0.2.6",
+	"description": "Restore previous session windows and tabs, including private.",
+	"permissions": [
+		"tabs",
+		"storage",
+		"alarms"
+	],
+	"incognito": "spanning",
+	"background": {
+		"service_worker": "background.js",
+		"type": "module"
+	},
+	"action": {
+		"default_popup": "popup.html",
+		"default_title": "Restore previous session windows and tabs"
+	}
+}

@@ -1,0 +1,13 @@
+{
+	"name": "total-recall",
+	"version": "0.2.6",
+	"description": "Restores previous browsing session after a crash, restart, or accidental close.",
+	"license": "ISC",
+	"author": "SYGN - Finland",
+	"type": "module",
+	"main": "background.js",
+	"scripts": {
+		"test": "node --test",
+		"release": "node scripts/bump-version.js && mkdir -p release && zip -r release/total-recall-$(node -e \"process.stdout.write(require('./manifest.json').version)\").zip *.js *.html *.css *.json assets/wordlogo.png -x '*.test.js' -x 'package.json'"
+	}
+}
