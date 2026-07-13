@@ -328,9 +328,13 @@ updateIcon().catch((e) => console.warn("icon: initial paint failed", e.message))
 
 // Durable backstop for the setTimeout debounce, which dies with the service
 // worker. A periodic alarm guarantees a capture lands even if the worker was
-// torn down between the last event and its debounced flush. Re-creating with the
-// same name on each worker wakeup is idempotent.
-chrome.alarms.create(BACKSTOP_ALARM, { periodInMinutes: BACKSTOP_PERIOD_MIN });
+// torn down between the last event and its debounced flush. Only create it when
+// absent: this runs on every worker wakeup, and re-creating would reset the
+// period countdown each time, so a busy worker could keep pushing the backstop
+// past its own interval and it would rarely fire standalone.
+chrome.alarms.get(BACKSTOP_ALARM, (existing) => {
+	if (!existing) chrome.alarms.create(BACKSTOP_ALARM, { periodInMinutes: BACKSTOP_PERIOD_MIN });
+});
 
 chrome.windows.onCreated.addListener(scheduleSnapshot);
 chrome.windows.onRemoved.addListener(scheduleSnapshot);
