@@ -4,8 +4,12 @@ const SNAPSHOT_KEY = "snapshot";
 const PREVIOUS_KEY = "previousSnapshot";
 const RECENT_KEY = "recentlyClosed";
 const SESSION_MARKER = "sessionActive";
-const DEBOUNCE_ALARM = "snapshot-debounce";
 const DEBOUNCE_MS = 500;
+const BACKSTOP_ALARM = "snapshot-backstop";
+// chrome.alarms clamps packed-extension periods to a ~1-minute floor, so this is
+// as tight as the durable backstop can run; the setTimeout debounce below does
+// the sub-second coalescing that alarms can't.
+const BACKSTOP_PERIOD_MIN = 1;
 const RECENT_CAP = 8;
 const ICON_AVAILABLE_BG = "#7c3aed";
 const ICON_IDLE_BG = "#666";
@@ -95,6 +99,17 @@ async function captureSnapshot() {
 		})),
 	};
 
+	// Skip redundant writes: onUpdated fires on favicon/title churn, and getAll
+	// runs on every event, but if nothing structural changed since the last
+	// capture the stored snapshot is already accurate. Same-session guard because
+	// a cross-session prior lives in a different id space and must be rotated, not
+	// matched. An unchanged window set also means nothing was closed, so the
+	// closed-window diff below would be empty anyway.
+	if (prior && prior.sessionId === sessionId
+		&& JSON.stringify(prior.windows) === JSON.stringify(snapshot.windows)) {
+		return prior;
+	}
+
 	// A window present last capture but gone now was closed while the browser
 	// kept running — stash it so an accidental close stays recoverable. Only
 	// diff against a prior capture from the SAME session: window ids are not
@@ -113,8 +128,19 @@ async function captureSnapshot() {
 }
 
 
+let debounceTimer = null;
+
+
+// Coalesce bursts of tab/window events into a single capture. setTimeout gives
+// the true sub-second debounce that chrome.alarms can't (its period is clamped
+// to a ~1-minute floor for packed extensions); the periodic BACKSTOP_ALARM
+// covers the case where the service worker is torn down before this timer fires.
 function scheduleSnapshot() {
-	chrome.alarms.create(DEBOUNCE_ALARM, { when: Date.now() + DEBOUNCE_MS });
+	if (debounceTimer) clearTimeout(debounceTimer);
+	debounceTimer = setTimeout(() => {
+		debounceTimer = null;
+		handleSnapshotTrigger().catch((e) => console.warn("snapshot: capture failed", e.message));
+	}, DEBOUNCE_MS);
 }
 
 
@@ -177,7 +203,7 @@ async function handleSnapshotTrigger() {
 
 
 chrome.alarms.onAlarm.addListener((alarm) => {
-	if (alarm.name === DEBOUNCE_ALARM) handleSnapshotTrigger();
+	if (alarm.name === BACKSTOP_ALARM) handleSnapshotTrigger();
 });
 
 
@@ -299,6 +325,12 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 updateIcon().catch((e) => console.warn("icon: initial paint failed", e.message));
+
+// Durable backstop for the setTimeout debounce, which dies with the service
+// worker. A periodic alarm guarantees a capture lands even if the worker was
+// torn down between the last event and its debounced flush. Re-creating with the
+// same name on each worker wakeup is idempotent.
+chrome.alarms.create(BACKSTOP_ALARM, { periodInMinutes: BACKSTOP_PERIOD_MIN });
 
 chrome.windows.onCreated.addListener(scheduleSnapshot);
 chrome.windows.onRemoved.addListener(scheduleSnapshot);
