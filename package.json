@@ -1,6 +1,6 @@
 {
 	"name": "total-recall",
-	"version": "0.2.6",
+	"version": "0.2.7",
 	"description": "Restores previous browsing session after a crash, restart, or accidental close.",
 	"license": "ISC",
 	"author": "SYGN - Finland",
